@@ -1,12 +1,13 @@
 import { getPool } from './db.js';
 
-export type ProviderName = 'anthropic' | 'openai';
+export type ProviderName = 'anthropic' | 'openai' | 'deepseek';
 
 export interface AppConfig {
   system_prompt: string;
   llm_provider: ProviderName;
   llm_model_anthropic: string;
   llm_model_openai: string;
+  llm_model_deepseek: string;
 }
 
 const defaults: AppConfig = {
@@ -14,7 +15,8 @@ const defaults: AppConfig = {
     'You are a helpful AI assistant for livestreaming inquiries. Answer the user using the provided context. If the context does not contain enough information to answer confidently, say you do not know.',
   llm_provider: 'anthropic',
   llm_model_anthropic: 'claude-sonnet-4-6',
-  llm_model_openai: 'gpt-4o-mini'
+  llm_model_openai: 'gpt-4o-mini',
+  llm_model_deepseek: 'deepseek-chat'
 };
 
 export async function getConfig(): Promise<AppConfig> {
@@ -27,7 +29,8 @@ export async function getConfig(): Promise<AppConfig> {
     system_prompt: map.system_prompt ?? defaults.system_prompt,
     llm_provider: (map.llm_provider as ProviderName) ?? defaults.llm_provider,
     llm_model_anthropic: map.llm_model_anthropic ?? defaults.llm_model_anthropic,
-    llm_model_openai: map.llm_model_openai ?? defaults.llm_model_openai
+    llm_model_openai: map.llm_model_openai ?? defaults.llm_model_openai,
+    llm_model_deepseek: map.llm_model_deepseek ?? defaults.llm_model_deepseek
   };
 }
 

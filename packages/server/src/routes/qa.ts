@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { getPool } from '../db.js';
+import { promoteWinningSuggestion } from '../lib/promote.js';
 
 export const qaRouter = Router();
 
@@ -41,7 +42,8 @@ qaRouter.get('/', async (req, res, next) => {
 
 const suggestRequest = z.object({
   question: z.string().min(1).max(4000),
-  suggested_answer: z.string().min(1).max(8000)
+  suggested_answer: z.string().min(1).max(8000),
+  submitted_by: z.string().min(1).max(120)
 });
 
 qaRouter.post('/suggest', async (req, res, next) => {
@@ -50,7 +52,21 @@ qaRouter.post('/suggest', async (req, res, next) => {
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
     }
-    res.status(501).json({ error: 'Not implemented' });
+    const { question, suggested_answer, submitted_by } = parsed.data;
+    const pool = getPool();
+
+    await pool.query(
+      'INSERT INTO suggestions (question, answer, submitted_by) VALUES (?, ?, ?)',
+      [question, suggested_answer, submitted_by]
+    );
+
+    const result = await promoteWinningSuggestion(question);
+
+    res.json({
+      submitted: true,
+      promoted: result?.promoted ?? false,
+      current_answer: result?.answer ?? null
+    });
   } catch (err) {
     next(err);
   }

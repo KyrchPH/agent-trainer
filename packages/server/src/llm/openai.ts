@@ -1,10 +1,18 @@
 import OpenAI from 'openai';
 import type { LLMProvider } from './types.js';
 
-export function createOpenAIProvider(apiKey: string): LLMProvider {
-  const client = new OpenAI({ apiKey });
+export interface OpenAIProviderOptions {
+  baseURL?: string;
+  name?: LLMProvider['name'];
+}
+
+export function createOpenAIProvider(
+  apiKey: string,
+  options: OpenAIProviderOptions = {}
+): LLMProvider {
+  const client = new OpenAI({ apiKey, baseURL: options.baseURL });
   return {
-    name: 'openai',
+    name: options.name ?? 'openai',
     async chat({ system, messages, model }) {
       const response = await client.chat.completions.create({
         model,

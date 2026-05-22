@@ -54,7 +54,7 @@ export default function AdminConfig() {
   }
 
   return (
-    <div className="flex-1 px-6 py-6 overflow-y-auto">
+    <div className="thin-scrollbar flex-1 px-6 py-6 overflow-y-auto">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-medium mb-6">Admin Configuration</h1>
 
@@ -82,6 +82,7 @@ export default function AdminConfig() {
             >
               <option value="anthropic">Anthropic Claude</option>
               <option value="openai">OpenAI</option>
+              <option value="deepseek">DeepSeek</option>
             </select>
           </Field>
 
@@ -99,6 +100,15 @@ export default function AdminConfig() {
               type="text"
               value={config.llm_model_openai}
               onChange={e => update('llm_model_openai', e.target.value)}
+              className="w-full rounded-lg bg-chat-input border border-chat-border px-4 py-2 text-chat-text focus:outline-none focus:border-chat-muted"
+            />
+          </Field>
+
+          <Field label="DeepSeek Model" hint="deepseek-chat (V3) or deepseek-reasoner (R1).">
+            <input
+              type="text"
+              value={config.llm_model_deepseek}
+              onChange={e => update('llm_model_deepseek', e.target.value)}
               className="w-full rounded-lg bg-chat-input border border-chat-border px-4 py-2 text-chat-text focus:outline-none focus:border-chat-muted"
             />
           </Field>

@@ -1,6 +1,6 @@
-# Agent Trainer
+# WiseAI
 
-Training data builder for the Livestreamer AI Agent. Users ask questions in a chat interface; the AI answers using context retrieved from MySQL. When no answer exists, users can suggest one and the AI decides whether to merge or replace.
+Training data builder for the company's Livestreamer AI Agent. Users ask questions in a chat interface; the AI answers using context retrieved from MySQL. When no answer exists, users can suggest one and the AI decides whether to merge or replace.
 
 ## Stack
 

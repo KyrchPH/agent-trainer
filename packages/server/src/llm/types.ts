@@ -10,6 +10,6 @@ export interface LLMChatInput {
 }
 
 export interface LLMProvider {
-  name: 'anthropic' | 'openai';
+  name: 'anthropic' | 'openai' | 'deepseek';
   chat(input: LLMChatInput): Promise<string>;
 }

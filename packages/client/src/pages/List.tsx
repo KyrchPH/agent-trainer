@@ -48,7 +48,7 @@ export default function List() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="flex-1 px-6 py-6 overflow-y-auto">
+    <div className="thin-scrollbar flex-1 px-6 py-6 overflow-y-auto">
       <div className="max-w-5xl mx-auto">
         <h1 className="text-2xl font-medium mb-6">Q&amp;A Database</h1>
         <form onSubmit={handleSearch} className="mb-6 flex gap-2">
