@@ -39,6 +39,8 @@ export interface SuggestResponse {
 
 export interface AppConfig {
   system_prompt: string;
+  agent_personality: string;
+  company_info: string;
   llm_provider: 'anthropic' | 'openai' | 'deepseek';
   llm_model_anthropic: string;
   llm_model_openai: string;

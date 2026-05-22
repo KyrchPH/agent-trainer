@@ -65,10 +65,28 @@ export default function AdminConfig() {
         )}
 
         <form onSubmit={handleSave} className="space-y-5">
-          <Field label="System Prompt" hint="Instructions sent to the AI on every chat request.">
+          <Field label="System Prompt" hint="Instructions sent to the AI on every chat request. Defines role, rules, and how to use context.">
             <textarea
               value={config.system_prompt}
               onChange={e => update('system_prompt', e.target.value)}
+              rows={10}
+              className="w-full rounded-lg bg-chat-input border border-chat-border px-4 py-2 text-chat-text font-mono text-sm focus:outline-none focus:border-chat-muted"
+            />
+          </Field>
+
+          <Field label="Agent Personality" hint="How the AI should sound: tone, voice, mannerisms. Kept separate from the system prompt so you can iterate on it without touching the rules.">
+            <textarea
+              value={config.agent_personality}
+              onChange={e => update('agent_personality', e.target.value)}
+              rows={4}
+              className="w-full rounded-lg bg-chat-input border border-chat-border px-4 py-2 text-chat-text font-mono text-sm focus:outline-none focus:border-chat-muted"
+            />
+          </Field>
+
+          <Field label="Company Information" hint="Facts about the company: name, what you sell, hours, shipping policy, etc. The AI uses this as authoritative reference material.">
+            <textarea
+              value={config.company_info}
+              onChange={e => update('company_info', e.target.value)}
               rows={8}
               className="w-full rounded-lg bg-chat-input border border-chat-border px-4 py-2 text-chat-text font-mono text-sm focus:outline-none focus:border-chat-muted"
             />

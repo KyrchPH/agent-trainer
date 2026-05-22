@@ -15,6 +15,8 @@ adminRouter.get('/config', async (_req, res, next) => {
 
 const configUpdate = z.object({
   system_prompt: z.string().optional(),
+  agent_personality: z.string().optional(),
+  company_info: z.string().optional(),
   llm_provider: z.enum(['anthropic', 'openai', 'deepseek']).optional(),
   llm_model_anthropic: z.string().optional(),
   llm_model_openai: z.string().optional(),

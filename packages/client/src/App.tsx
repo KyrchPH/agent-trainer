@@ -83,12 +83,10 @@ function Header() {
 
 function AppShell() {
   const { name } = useUserName();
-  const location = useLocation();
   if (!name) return <NamePrompt />;
-  const onChat = location.pathname === '/';
   return (
     <div className="relative h-screen bg-chat-bg text-chat-text flex flex-col overflow-hidden">
-      {onChat && <AuroraBackground variant="subtle" />}
+      <AuroraBackground variant="subtle" />
       <Header />
       <div className="relative z-10 flex-1 flex flex-col min-h-0">
         <Routes>

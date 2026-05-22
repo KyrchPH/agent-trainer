@@ -32,17 +32,42 @@ type ProductContextRow = {
   price: number;
   description: string | null;
 };
+type CategorySummary = {
+  category: string | null;
+  sku_count: number;
+  min_price: number;
+  max_price: number;
+};
+type ProductSummary = {
+  totalProducts: number;
+  categories: CategorySummary[];
+};
 
 function buildSystemPrompt(opts: {
   basePrompt: string;
+  personality: string;
+  companyInfo: string;
   userName: string;
   qaContext: QAContextRow[];
   productContext: ProductContextRow[];
+  productSummary: ProductSummary;
 }): string {
-  const parts: string[] = [
-    opts.basePrompt,
+  const parts: string[] = [opts.basePrompt];
+
+  // Personality controls *how* the assistant talks. Stable across turns.
+  if (opts.personality.trim()) {
+    parts.push(`## Personality\n\n${opts.personality.trim()}`);
+  }
+
+  // Company information is reference material about the business itself.
+  // Combined with Q&A as authoritative factual context.
+  if (opts.companyInfo.trim()) {
+    parts.push(`## Company information\n\n${opts.companyInfo.trim()}`);
+  }
+
+  parts.push(
     `The user you are speaking with is named ${opts.userName}. Address them by name when it feels natural.`
-  ];
+  );
 
   // Q&A section — primary source of truth.
   if (opts.qaContext.length > 0) {
@@ -59,7 +84,26 @@ function buildSystemPrompt(opts: {
     parts.push('## Previously trained Q&A\n\n(No related entries found for this question.)');
   }
 
-  // Product section — only when keyword/category search hit. Empty otherwise.
+  // Product catalog summary — included on every turn so the AI can answer
+  // aggregate questions ("how many products?", "what categories?") without
+  // depending on FULLTEXT keyword matching.
+  if (opts.productSummary.totalProducts > 0) {
+    const catCount = opts.productSummary.categories.length;
+    const catLines = opts.productSummary.categories.map(c => {
+      const range =
+        c.min_price === c.max_price
+          ? `₱${c.min_price.toFixed(2)}`
+          : `₱${c.min_price.toFixed(2)} - ₱${c.max_price.toFixed(2)}`;
+      return `- ${c.category ?? '(uncategorised)'}: ${c.sku_count} SKU${c.sku_count === 1 ? '' : 's'}, ${range}`;
+    });
+    parts.push(
+      `## Product catalog summary\n\n` +
+        `Total: ${opts.productSummary.totalProducts} products across ${catCount} categor${catCount === 1 ? 'y' : 'ies'}.\n\n` +
+        `By category (SKU count, price range):\n${catLines.join('\n')}`
+    );
+  }
+
+  // Specific matched products — only when keyword/category search hit.
   if (opts.productContext.length > 0) {
     parts.push(
       `## Relevant products\n\n` +
@@ -205,6 +249,25 @@ chatRouter.post('/', async (req, res, next) => {
       }>
     ).map(p => ({ ...p, price: Number(p.price) }));
 
+    // Catalog summary: total + per-category count and price range.
+    const [totalRows] = await pool.query('SELECT COUNT(*) AS n FROM products');
+    const totalProducts = Number((totalRows as Array<{ n: number }>)[0]?.n ?? 0);
+    const [summaryRows] = await pool.query(
+      `SELECT category, COUNT(*) AS sku_count, MIN(price) AS min_price, MAX(price) AS max_price
+       FROM products
+       GROUP BY category
+       ORDER BY sku_count DESC, category ASC`
+    );
+    const categories: CategorySummary[] = (
+      summaryRows as Array<{ category: string | null; sku_count: number; min_price: string | number; max_price: string | number }>
+    ).map(r => ({
+      category: r.category,
+      sku_count: Number(r.sku_count),
+      min_price: Number(r.min_price),
+      max_price: Number(r.max_price)
+    }));
+    const productSummary: ProductSummary = { totalProducts, categories };
+
     const config = await getConfig();
     const model =
       config.llm_provider === 'anthropic'
@@ -215,9 +278,12 @@ chatRouter.post('/', async (req, res, next) => {
 
     const system = buildSystemPrompt({
       basePrompt: config.system_prompt,
+      personality: config.agent_personality,
+      companyInfo: config.company_info,
       userName: user_name,
       qaContext,
-      productContext
+      productContext,
+      productSummary
     });
 
     const provider = createProvider(config.llm_provider);
