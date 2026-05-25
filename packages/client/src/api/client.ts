@@ -47,8 +47,16 @@ export interface AppConfig {
   llm_model_deepseek: string;
 }
 
+// Base URL the API is served from. In dev it stays empty so requests like
+// "/api/chat" hit the Vite proxy (which forwards to localhost:4000). In a
+// production build, set VITE_API_BASE in .env.production (or any .env that
+// Vite loads for the active mode) to the public API origin, e.g.
+//   VITE_API_BASE=https://api.wiseai.sixpent.com
+// The trailing slash is stripped so we never end up with "//api/chat".
+const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/+$/, '');
+
 async function http<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(API_BASE + url, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) }
   });
