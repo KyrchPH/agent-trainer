@@ -4,6 +4,7 @@ import cors from 'cors';
 import { chatRouter } from './routes/chat.js';
 import { qaRouter } from './routes/qa.js';
 import { adminRouter } from './routes/admin.js';
+import { accountRouter } from './routes/account.js';
 import { ping } from './db.js';
 
 const app = express();
@@ -24,6 +25,7 @@ app.get('/api/health', async (_req, res) => {
 app.use('/api/chat', chatRouter);
 app.use('/api/qa', qaRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/account', accountRouter);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

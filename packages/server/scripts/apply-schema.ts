@@ -40,4 +40,36 @@ console.log(`Tables after:  ${afterTables.join(', ')}`);
 const added = afterTables.filter(t => !beforeTables.includes(t));
 console.log(`Added: ${added.length ? added.join(', ') : '(none, all already existed)'}`);
 
+// Idempotent column migrations. CREATE TABLE IF NOT EXISTS won't alter an
+// existing table, so column additions need explicit handling. Each entry
+// below checks INFORMATION_SCHEMA before ALTERing so re-running is safe.
+const columnMigrations: Array<{ table: string; column: string; ddl: string }> = [
+  {
+    table: 'messages',
+    column: 'from_qa_entries',
+    ddl: 'ALTER TABLE messages ADD COLUMN from_qa_entries TINYINT(1) NOT NULL DEFAULT 0 AFTER content'
+  },
+  {
+    table: 'suggestions',
+    column: 'updated_at',
+    ddl: 'ALTER TABLE suggestions ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at'
+  }
+];
+
+for (const m of columnMigrations) {
+  const [colRows] = await conn.query(
+    `SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [connOpts.database, m.table, m.column]
+  );
+  const exists = Number((colRows as Array<{ n: number }>)[0]?.n ?? 0) > 0;
+  if (exists) {
+    console.log(`Column ${m.table}.${m.column}: already present.`);
+  } else {
+    console.log(`Column ${m.table}.${m.column}: adding...`);
+    await conn.query(m.ddl);
+    console.log(`Column ${m.table}.${m.column}: added.`);
+  }
+}
+
 await conn.end();

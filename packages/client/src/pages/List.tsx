@@ -50,7 +50,22 @@ export default function List() {
   return (
     <div className="thin-scrollbar flex-1 px-6 py-6 overflow-y-auto">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-2xl font-medium mb-6">Q&amp;A Database</h1>
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <h1 className="text-2xl font-medium">Q&amp;A Database</h1>
+          <a
+            href={api.qaExportUrl()}
+            // download attribute hints the browser to save rather than
+            // navigate; the server's Content-Disposition header guarantees it.
+            download
+            className="inline-flex items-center gap-2 px-3 py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition"
+            title="Download all Q&A entries as an Excel (.xlsx) file"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            <span>Export to Excel</span>
+          </a>
+        </div>
         <form onSubmit={handleSearch} className="mb-6 flex gap-2">
           <input
             type="text"

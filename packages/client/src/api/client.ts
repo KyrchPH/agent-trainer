@@ -19,6 +19,8 @@ export interface ChatResponse {
   user_name?: string | null;
   user_message_id?: number;
   assistant_message_id?: number;
+  suggestion_count?: number;
+  from_qa_entries?: boolean;
   provider?: string;
   model?: string;
 }
@@ -29,12 +31,29 @@ export interface StoredMessage {
   content: string;
   created_at: string;
   my_vote: 'up' | 'down' | null;
+  suggestion_count?: number;
+  from_qa_entries?: boolean | number;
 }
 
 export interface SuggestResponse {
   submitted: boolean;
   promoted: boolean;
   current_answer: string | null;
+  // True when the server rewrote the specific assistant message identified
+  // by `target_message_id` because the submission became the canonical answer.
+  // Lets the chat UI confirm the persistent update went through.
+  updated_target_message?: boolean;
+}
+
+export interface SuggestionRow {
+  id: number;
+  answer: string;
+  submitted_by: string;
+  created_at: string;
+  updated_at?: string;
+  upvotes?: number;
+  downvotes?: number;
+  my_vote?: 'up' | 'down' | null;
 }
 
 export interface AppConfig {
@@ -74,10 +93,14 @@ export const api = {
       body: JSON.stringify({ question, user_name: userName ?? undefined })
     }),
 
-  getMessages: (userName: string) =>
-    http<{ messages: StoredMessage[] }>(
-      `/api/chat/messages?user_name=${encodeURIComponent(userName)}`
-    ),
+  getMessages: (params: { user_name: string; before_id?: number; limit?: number }) => {
+    const qs = new URLSearchParams({ user_name: params.user_name });
+    if (params.before_id !== undefined) qs.set('before_id', String(params.before_id));
+    if (params.limit !== undefined) qs.set('limit', String(params.limit));
+    return http<{ messages: StoredMessage[]; has_more: boolean }>(
+      `/api/chat/messages?${qs.toString()}`
+    );
+  },
 
   voteOnMessage: (messageId: number, voterName: string, voteType: 'up' | 'down' | null) =>
     http<{ vote_type: 'up' | 'down' | null }>(
@@ -98,10 +121,42 @@ export const api = {
     );
   },
 
-  suggestAnswer: (question: string, suggested_answer: string, submitted_by: string) =>
+  suggestAnswer: (
+    question: string,
+    suggested_answer: string,
+    submitted_by: string,
+    target_message_id?: number | null
+  ) =>
     http<SuggestResponse>('/api/qa/suggest', {
       method: 'POST',
-      body: JSON.stringify({ question, suggested_answer, submitted_by })
+      body: JSON.stringify({ question, suggested_answer, submitted_by, target_message_id })
+    }),
+
+  getSuggestions: (question: string, viewer?: string | null) => {
+    const qs = new URLSearchParams({ question });
+    if (viewer) qs.set('viewer', viewer);
+    return http<{ suggestions: SuggestionRow[] }>(`/api/qa/suggestions?${qs.toString()}`);
+  },
+
+  voteOnSuggestion: (suggestionId: number, voterName: string, voteType: 'up' | 'down' | null) =>
+    http<{
+      vote_type: 'up' | 'down' | null;
+      qa_entries_answer: string | null;
+      promoted: boolean;
+    }>(`/api/qa/suggestions/${suggestionId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ voter_name: voterName, vote_type: voteType })
+    }),
+
+  editSuggestion: (suggestionId: number, answer: string, submittedBy: string) =>
+    http<{
+      updated: boolean;
+      deleted_votes: number;
+      qa_entries_answer: string | null;
+      promoted: boolean;
+    }>(`/api/qa/suggestions/${suggestionId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ answer, submitted_by: submittedBy })
     }),
 
   getConfig: () => http<AppConfig>('/api/admin/config'),
@@ -110,5 +165,34 @@ export const api = {
     http<AppConfig>('/api/admin/config', {
       method: 'PUT',
       body: JSON.stringify(updates)
-    })
+    }),
+
+  // Account / slash-command endpoints.
+  clearMessages: (userName: string) =>
+    http<{ deleted_messages: number }>(
+      `/api/account/messages?user_name=${encodeURIComponent(userName)}`,
+      { method: 'DELETE' }
+    ),
+
+  clearVotes: (voterName: string) =>
+    http<{ deleted_votes: number }>(
+      `/api/account/votes?voter_name=${encodeURIComponent(voterName)}`,
+      { method: 'DELETE' }
+    ),
+
+  deleteAccount: (userName: string) =>
+    http<{
+      deleted_messages: number;
+      deleted_votes: number;
+      deleted_suggestions: number;
+    }>(`/api/account?user_name=${encodeURIComponent(userName)}`, { method: 'DELETE' }),
+
+  listUsers: () => http<{ users: string[] }>('/api/account/users'),
+
+  // Returns the absolute URL of the qa_entries .xlsx export. Browsers respect
+  // the `Content-Disposition: attachment` header on the response and trigger
+  // a download, so we just need to hand the URL to an <a href> or
+  // window.location. We can't use the http() helper here because it parses
+  // the response as JSON.
+  qaExportUrl: () => `${API_BASE}/api/qa/export`
 };

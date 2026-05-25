@@ -1,4 +1,5 @@
 import { getPool } from '../db.js';
+import { depersonalizeAnswer, fetchUserNames } from './personalize.js';
 
 export interface PromotionResult {
   answer: string;
@@ -10,6 +11,19 @@ export interface PromotionResult {
 // (upvotes - downvotes), tiebreak by most recent contribution, and upsert it
 // into qa_entries.
 //
+// Promotion rules:
+//   - A candidate's score is its explicit votes only: ups - downs. There is
+//     NO implicit "+1 from submitter" for suggestions — a brand-new
+//     suggestion sits at 0/0.
+//   - Any candidate with net_score >= 0 qualifies for promotion. A tied-at-
+//     zero candidate still wins if there's nothing better; only a NET
+//     NEGATIVE candidate (community rejected) is excluded.
+//   - Among qualifying candidates, highest net wins. Ties go to the most
+//     recent contribution (newer suggestion replaces older one at the same
+//     score).
+//   - If no candidate qualifies (everything has net < 0, or no candidates
+//     exist), the qa_entries row for this question is deleted.
+//
 // Candidates are gathered from two sources and grouped by answer text
 // (case- and accent-insensitive via the table collation):
 //
@@ -19,8 +33,9 @@ export interface PromotionResult {
 //      unvoted "I don't know" cannot auto-promote itself.
 //
 //   2. Each user-submitted suggestion stored in `suggestions` for this
-//      question. Each distinct submitter counts as one implicit upvote;
-//      suggestions cannot be downvoted (they are not visible to others).
+//      question. Score comes purely from `suggestion_votes` (no implicit
+//      submitter +1). The server still rejects self-votes so submitters
+//      can't promote their own work artificially.
 //
 // Same answer text from both sources is summed.
 export async function promoteWinningSuggestion(question: string): Promise<PromotionResult | null> {
@@ -50,10 +65,11 @@ export async function promoteWinningSuggestion(question: string): Promise<Promot
      ),
      user_candidates AS (
        SELECT s.answer,
-              COUNT(DISTINCT s.submitted_by) AS upvotes,
-              0 AS downvotes,
+              SUM(CASE WHEN sv.vote_type = 'up'   THEN 1 ELSE 0 END) AS upvotes,
+              SUM(CASE WHEN sv.vote_type = 'down' THEN 1 ELSE 0 END) AS downvotes,
               MAX(s.created_at) AS recent
        FROM suggestions s
+       LEFT JOIN suggestion_votes sv ON sv.suggestion_id = s.id
        WHERE s.question = ?
        GROUP BY s.answer
      ),
@@ -67,13 +83,32 @@ export async function promoteWinningSuggestion(question: string): Promise<Promot
             MAX(recent) AS recent
      FROM combined
      GROUP BY answer
+     HAVING net_score >= 0
      ORDER BY net_score DESC, recent DESC
      LIMIT 1`,
     [question, question]
   );
 
   const winner = (rows as Array<{ answer: string; net_score: number; recent: string }>)[0];
-  if (!winner) return null;
+  if (!winner) {
+    // No qualifying candidate. Either there are zero candidates, or every
+    // candidate is at net_score < 0 (community explicitly rejected them).
+    // Remove any previously promoted qa_entry so the training set only
+    // contains non-rejected answers. A 0/0 suggestion still qualifies and
+    // wins, so this branch only fires on outright rejection or empty pools.
+    await pool.query('DELETE FROM qa_entries WHERE question = ?', [question]);
+    return null;
+  }
+
+  // Depersonalise before writing: any user names baked into the winning
+  // answer get swapped to `<name>` placeholders so the qa_entries row is
+  // portable across viewers. The serve-time path (chat.ts) rehydrates back
+  // to the current viewer's name. We compare BOTH sides depersonalised
+  // when deciding "is this the same answer?", which (a) lets us upgrade
+  // legacy rows from baked-in to placeholder form on the next promotion,
+  // and (b) avoids spurious UPDATEs when the only difference is a name.
+  const knownNames = await fetchUserNames();
+  const newAnswer = depersonalizeAnswer(winner.answer, knownNames);
 
   const [existing] = await pool.query(
     'SELECT id, answer FROM qa_entries WHERE question = ? LIMIT 1',
@@ -82,21 +117,22 @@ export async function promoteWinningSuggestion(question: string): Promise<Promot
   const existingRow = (existing as Array<{ id: number; answer: string }>)[0];
 
   if (existingRow) {
-    if (existingRow.answer === winner.answer) {
-      return { answer: winner.answer, promoted: false, net_score: Number(winner.net_score) };
+    const existingDepersonalised = depersonalizeAnswer(existingRow.answer, knownNames);
+    if (existingDepersonalised === newAnswer) {
+      return { answer: newAnswer, promoted: false, net_score: Number(winner.net_score) };
     }
     await pool.query('UPDATE qa_entries SET answer = ? WHERE id = ?', [
-      winner.answer,
+      newAnswer,
       existingRow.id
     ]);
-    return { answer: winner.answer, promoted: true, net_score: Number(winner.net_score) };
+    return { answer: newAnswer, promoted: true, net_score: Number(winner.net_score) };
   }
 
   await pool.query('INSERT INTO qa_entries (question, answer) VALUES (?, ?)', [
     question,
-    winner.answer
+    newAnswer
   ]);
-  return { answer: winner.answer, promoted: true, net_score: Number(winner.net_score) };
+  return { answer: newAnswer, promoted: true, net_score: Number(winner.net_score) };
 }
 
 // Returns the user-message text that immediately preceded the given assistant
